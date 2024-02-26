@@ -38,19 +38,35 @@ struct youtube_subscript {
         return cache[id] = nlohmann::json::parse(s)["captionTracks"];
     }
     auto languages() {
-        std::vector<std::string> codes;
+        std::vector<std::pair<std::string, std::string>> codes;
         for (auto &&d : data()) {
-            codes.emplace_back(d["languageCode"]);
+            auto code = d["languageCode"];
+            auto kind = ""s;
+            if (d.contains("kind")) {
+                kind = d["kind"];
+            }
+            codes.emplace_back(code, kind);
         }
         return codes;
     }
-    std::string url(const std::string &lang) {
+    std::string url(const std::string &lang, const std::string &kind) {
         for (auto &&d : data()) {
-            if (d["languageCode"] == lang) {
+            if (d["languageCode"] == lang && (!d.contains("kind") || d["kind"] == kind)) {
                 return d["baseUrl"];
             }
         }
         return {};
+    }
+    static std::string concat_lang_and_kind(const std::string &lang, const std::string &kind) {
+        auto label = lang;
+        if (!kind.empty()) {
+            if (kind == "asr"s) {
+                label += " (auto)";
+            } else {
+                label += " (unk)";
+            }
+        }
+        return label;
     }
 };
 
@@ -183,12 +199,13 @@ struct tg_report_detection_bot : tg_bot {
         if (!query.message || !query.data) {
             return;
         }
-        auto v = split_string(*query.data, ",");
+        auto v = split_string(*query.data, ",", true);
         auto &lang = v.at(0);
-        auto &id = v.at(1);
+        auto &kind = v.at(1);
+        auto &id = v.at(2);
 
         youtube_subscript s{id};
-        auto url = s.url(lang);
+        auto url = s.url(lang, kind);
         auto xml = download_file(url);
         pugi::xml_document doc;
         if (!doc.load_string(xml.data())) {
@@ -256,10 +273,15 @@ struct tg_report_detection_bot : tg_bot {
                 req.reply_parameters = tgbot::ReplyParameters{std::stoll(*query.inline_message_id)};
             }
             req.chat_id = query.message->chat->id;
-            req.text = "your subscript for ";
-            auto add_with_link = [&](auto &&text, auto &&link) {
-                req.entities.push_back(tgbot::MessageEntity{"text_link", (int)req.text.size(), (int)text.size(), link});
+            auto add_with_type = [&](auto &&text, auto &&type, auto && ... args) {
+                req.entities.push_back(tgbot::MessageEntity{type, (int)req.text.size(), (int)text.size(), args...});
                 req.text += text;
+            };
+            req.text += "your ";
+            add_with_type(youtube_subscript::concat_lang_and_kind(lang,kind), "code");
+            req.text += " subscript for ";
+            auto add_with_link = [&](auto &&text, auto &&link) {
+                add_with_type(text, "text_link", link);
             };
             add_with_link("video"s, "https://www.youtube.com/watch?v="s + id);
             req.text += ":\n";
@@ -276,7 +298,7 @@ struct tg_report_detection_bot : tg_bot {
     }
     void handle_message(const tgbot::Message &message) {
         if (!message.text || message.text->starts_with("/"sv)) {
-            if (1 && *message.text == "/start") {
+            if (1 || message.text && *message.text == "/start") {
                 reply(message, "send me a youtube link");
             }
             return;
@@ -312,8 +334,9 @@ struct tg_report_detection_bot : tg_bot {
         tgbot::InlineKeyboardMarkup m;
         for (auto &&langs2 : langs | std::views::chunk(3)) {
             decltype(m.inline_keyboard)::value_type v;
-            for (auto &&l : langs2) {
-                v.emplace_back(std::make_unique<tgbot::InlineKeyboardButton>(l, "", l + "," + id));
+            for (auto &&[code,kind] : langs2) {
+                v.emplace_back(std::make_unique<tgbot::InlineKeyboardButton>(youtube_subscript::concat_lang_and_kind(code,kind),
+                    "", code + "," + kind + "," + id));
             }
             m.inline_keyboard.emplace_back(std::move(v));
         }
