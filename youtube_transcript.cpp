@@ -212,6 +212,7 @@ struct tg_report_detection_bot : tg_bot {
             reply(*query.message, "bad subscript xml");
             return;
         }
+
         constexpr auto array_len = 2;
         constexpr auto object_len = 2;
         constexpr auto text_quotes_len = 2;
@@ -223,66 +224,69 @@ struct tg_report_detection_bot : tg_bot {
             maxlen -= v.size() + text_quotes_len;
             return std::forward<decltype(v)>(v);
         };
-        std::vector<nlohmann::json> j;
-        j.emplace_back();
-        for (auto &&xn : doc.select_nodes(pugi::xpath_query{"/transcript/text"})) {
-            auto n = xn.node();
-            auto start = n.attribute("start").value();
-            auto dur = n.attribute("dur").value();
-            auto text = n.first_child().text().get();
-            std::string t = text;
 
-            static std::regex repl10{"&#(\\d+);"};
-            static std::regex repl16{"&#[xX](\\d+);"};
-            auto repl = [&](auto &&r, int base) {
-                std::smatch m;
-                while (std::regex_search(t, m, r)) {
-                    auto code = std::stoi(m[1].str(), 0, base);
-                    if (code > 255) {
-                        SW_UNIMPLEMENTED;
-                    }
-                    t = m.prefix().str() + (char)code + m.suffix().str();
-                }
-            };
-            repl(repl10, 10);
-            repl(repl16, 16);
-
-            auto ms = std::stof(start);
-            auto sec = (int)std::floor(ms);
-            auto min = sec / 60;
-            auto hr = min / 60;
-            auto tm = std::format("{}:{:02}:{:02}", hr, min % 60, sec % 60);
-
-            nlohmann::json time;
-            maxlen -= object_len;
-            time[count_len("tag"s)] = count_len("a"s);
-            maxlen -= colon_len + comma_len;
-            time[count_len("attrs"s)][count_len("href"s)] = count_len(std::format("https://youtu.be/{}?t={}", id, sec));
-            maxlen -= colon_len + object_len + colon_len;
-            time[count_len("children"s)].push_back(count_len(tm));
-            maxlen -= colon_len + array_len;
-
-            nlohmann::json line;
-            maxlen -= object_len;
-            line[count_len("tag"s)] = count_len("p"s);
-            maxlen -= colon_len + comma_len;
-            line[count_len("children"s)].push_back(count_len(" "s));
-            maxlen -= comma_len;
-            line[count_len("children"s)].push_back(count_len(t));
-            maxlen -= colon_len + array_len;
-            if (maxlen < 0) {
-                maxlen += telegraph::page_content_limit;
-                j.emplace_back();
-            }
-            j.back().push_back(time);
-            j.back().push_back(line);
-        }
         try {
             telegraph ph{"mybot"};
             std::vector<std::string> links;
-            for (auto &&page : j) {
-                links.emplace_back(ph.create_page("subscript for "s + id, page.dump()));
+            auto add_link = [&](auto &&j) {
+                links.emplace_back(ph.create_page("subscript for "s + id, j.dump()));
+            };
+
+            nlohmann::json j;
+            for (auto &&xn : doc.select_nodes(pugi::xpath_query{"/transcript/text"})) {
+                auto n = xn.node();
+                auto start = n.attribute("start").value();
+                auto dur = n.attribute("dur").value();
+                auto text = n.first_child().text().get();
+                std::string t = text;
+
+                static std::regex repl10{"&#(\\d+);"};
+                static std::regex repl16{"&#[xX](\\d+);"};
+                auto repl = [&](auto &&r, int base) {
+                    std::smatch m;
+                    while (std::regex_search(t, m, r)) {
+                        auto code = std::stoi(m[1].str(), 0, base);
+                        if (code > 255) {
+                            SW_UNIMPLEMENTED;
+                        }
+                        t = m.prefix().str() + (char)code + m.suffix().str();
+                    }
+                };
+                repl(repl10, 10);
+                repl(repl16, 16);
+
+                auto ms = std::stof(start);
+                auto sec = (int)std::floor(ms);
+                auto min = sec / 60;
+                auto hr = min / 60;
+                auto tm = std::format("{}:{:02}:{:02}", hr, min % 60, sec % 60);
+
+                nlohmann::json time;
+                maxlen -= object_len;
+                time[count_len("tag"s)] = count_len("a"s);
+                maxlen -= colon_len + comma_len;
+                time[count_len("attrs"s)][count_len("href"s)] = count_len(std::format("https://youtu.be/{}?t={}", id, sec));
+                maxlen -= colon_len + object_len + colon_len;
+                time[count_len("children"s)].push_back(count_len(tm));
+                maxlen -= colon_len + array_len;
+
+                nlohmann::json line;
+                maxlen -= object_len;
+                line[count_len("tag"s)] = count_len("p"s);
+                maxlen -= colon_len + comma_len;
+                line[count_len("children"s)].push_back(count_len(" "s));
+                maxlen -= comma_len;
+                line[count_len("children"s)].push_back(count_len(t));
+                maxlen -= colon_len + array_len;
+                if (maxlen < 0) {
+                    maxlen += telegraph::page_content_limit;
+                    add_link(j);
+                    j.clear();
+                }
+                j.push_back(time);
+                j.push_back(line);
             }
+
             tgbot::sendMessageRequest req;
             if (query.inline_message_id) {
                 req.reply_parameters = tgbot::ReplyParameters{std::stoll(*query.inline_message_id)};
