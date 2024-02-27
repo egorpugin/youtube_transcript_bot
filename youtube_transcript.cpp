@@ -230,7 +230,22 @@ struct tg_report_detection_bot : tg_bot {
             auto start = n.attribute("start").value();
             auto dur = n.attribute("dur").value();
             auto text = n.first_child().text().get();
-            std::string_view t = text;
+            std::string t = text;
+
+            static std::regex repl10{"&#(\\d+);"};
+            static std::regex repl16{"&#[xX](\\d+);"};
+            auto repl = [&](auto &&r, int base) {
+                std::smatch m;
+                while (std::regex_search(t, m, r)) {
+                    auto code = std::stoi(m[1].str(), 0, base);
+                    if (code > 255) {
+                        SW_UNIMPLEMENTED;
+                    }
+                    t = m.prefix().str() + (char)code + m.suffix().str();
+                }
+            };
+            repl(repl10, 10);
+            repl(repl16, 16);
 
             auto ms = std::stof(start);
             auto sec = (int)std::floor(ms);
