@@ -3,7 +3,7 @@ c++: 23
 deps:
     - org.sw.demo.nlohmann.json.natvis
     - pub.egorpugin.primitives.http
-    - org.sw.demo.tgbot
+    - org.sw.demo.tgbot-master
     - org.sw.demo.zeux.pugixml
 */
 

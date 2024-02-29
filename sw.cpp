@@ -4,6 +4,6 @@ void build(Solution &s){
     t += "youtube_transcript.cpp";
     t += "org.sw.demo.nlohmann.json.natvis"_dep;
     t += "pub.egorpugin.primitives.http"_dep;
-    t += "org.sw.demo.tgbot"_dep;
+    t += "org.sw.demo.tgbot-master"_dep;
     t += "org.sw.demo.zeux.pugixml"_dep;
 }
