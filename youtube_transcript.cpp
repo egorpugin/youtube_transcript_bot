@@ -1,15 +1,8 @@
-/*
-c++: 23
-deps:
-    - org.sw.demo.nlohmann.json.natvis
-    - pub.egorpugin.primitives.http
-    - org.sw.demo.tgbot
-    - org.sw.demo.zeux.pugixml
-*/
-
 #include "curl_http_client.h"
 #include <pugixml.hpp>
 #include <primitives/http.h>
+#include <primitives/sw/settings.h>
+#include <primitives/sw/main.h>
 #include <nlohmann/json.hpp>
 #include <format>
 #include <string>
@@ -372,9 +365,13 @@ struct tg_report_detection_bot : tg_bot {
 
 int main(int argc, char *argv[]) {
     primitives::http::setupSafeTls();
-    curl_http_client client;
     auto bot_token = getenv("BOT_TOKEN");
-    auto bot = std::make_unique<tg_report_detection_bot>(bot_token ? bot_token : "", client);
+    sw::setting<std::string> bot_token_s("bot_token");
+    if (!bot_token) {
+        sw::getSettings(sw::SettingsType::Local);
+    }
+    curl_http_client client;
+    auto bot = std::make_unique<tg_report_detection_bot>(bot_token ? std::string{bot_token} : bot_token_s, client);
     bot->init();
     bot->long_poll();
     return 0;

@@ -3,3 +3,5 @@
 *.html
 *.py
 *.txt
+*.sw
+*.settings
