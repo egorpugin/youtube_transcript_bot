@@ -1,11 +1,11 @@
-#include "curl_http_client.h"
+/*
+//cpp
+#pragma sw require header org.sw.demo.tgbot.curl_skeleton
+MAKE_SIMPLE_BOT(youtube_transcript, "org.sw.demo.zeux.pugixml"_dep)
+*/
+
+#include <tgbot_curl_skeleton.h>
 #include <pugixml.hpp>
-#include <primitives/http.h>
-#include <primitives/sw/settings.h>
-#include <primitives/sw/main.h>
-#include <nlohmann/json.hpp>
-#include <format>
-#include <string>
 
 struct youtube_subscript {
     static inline nlohmann::json cache;
@@ -113,74 +113,10 @@ struct telegraph {
     }
 };
 
-struct tg_bot : tgbot::bot<curl_http_client> {
-    using base = tgbot::bot<curl_http_client>;
-
-    std::string botname;
-    std::string botvisiblename;
-
-    static const int default_update_limit = 100;
-    static const int default_update_timeout = 10;
-    int net_delay_on_error = 1;
-
-public:
-    using base::base;
-
-    void init() {
-        auto me = api().getMe();
-        if (!me.username)
-            throw SW_RUNTIME_ERROR("Empty bot name");
-        botname = *me.username;
-        botvisiblename = me.first_name;
-        printf("bot username: %s (%s)\n", me.username->c_str(), me.first_name.c_str());
-    }
-    tgbot::Integer process_updates(tgbot::Integer offset = 0, tgbot::Integer limit = default_update_limit,
-                                   tgbot::Integer timeout = default_update_timeout,
-                                   const tgbot::Optional<tgbot::Vector<String>> &allowed_updates = {}) {
-        // update timeout here for getUpdates()
-        ((curl_http_client &)http_client()).set_timeout(timeout);
-
-        auto updates = api().getUpdates(offset, limit, timeout, allowed_updates);
-        for (const auto &item : updates) {
-            // if updates come unsorted, we must check this
-            if (item.update_id >= offset)
-                offset = item.update_id + 1;
-            process_update(item);
-        }
-        return offset;
-    }
-    void process_update(const tgbot::Update &update) {
-        try {
-            handle_update(update);
-        } catch (std::exception &e) {
-            printf("error: %s\n", e.what());
-
-            std::this_thread::sleep_for(std::chrono::seconds(net_delay_on_error));
-            if (net_delay_on_error < 30) {
-                net_delay_on_error *= 2;
-            }
-        }
-    }
-    void long_poll(tgbot::Integer limit = default_update_limit, tgbot::Integer timeout = default_update_timeout,
-                   const tgbot::Optional<tgbot::Vector<String>> &allowed_updates = {}) {
-        tgbot::Integer offset = 0;
-        while (1) {
-            try {
-                offset = process_updates(offset, limit, timeout, allowed_updates);
-            } catch (std::exception &e) {
-                printf("error: %s\n", e.what());
-                ++offset;
-            }
-        }
-    }
-    ///
-    virtual void handle_update(const tgbot::Update &update) = 0;
-};
-
-struct tg_report_detection_bot : tg_bot {
+struct youtube_subscript_bot : tg_bot {
     using tg_bot::tg_bot;
 
-    void handle_update(const tgbot::Update &update) override {
+    void handle_update(const tgbot::Update &update) {
         if (update.message) {
             handle_message(*update.message);
         }
@@ -364,15 +300,5 @@ struct tg_report_detection_bot : tg_bot {
 };
 
 int main(int argc, char *argv[]) {
-    primitives::http::setupSafeTls();
-    auto bot_token = getenv("BOT_TOKEN");
-    sw::setting<std::string> bot_token_s("bot_token");
-    if (!bot_token) {
-        sw::getSettings(sw::SettingsType::Local);
-    }
-    curl_http_client client;
-    auto bot = std::make_unique<tg_report_detection_bot>(bot_token ? std::string{bot_token} : bot_token_s, client);
-    bot->init();
-    bot->long_poll();
-    return 0;
+    return main<youtube_subscript_bot>(argc, argv);
 }
